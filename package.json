@@ -1,0 +1,27 @@
+{
+  "name": "marae-emoticon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "for Marae — 카카오 이모티콘 다운로더",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "login": "node login.js",
+    "start": "node server.js",
+    "up": "npx pm2 start ecosystem.config.js && npx pm2 save",
+    "down": "npx pm2 delete marae-emoticon",
+    "restart": "npx pm2 restart marae-emoticon",
+    "logs": "npx pm2 logs marae-emoticon",
+    "status": "npx pm2 status"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "pm2": "^5.4.2"
+  }
+}

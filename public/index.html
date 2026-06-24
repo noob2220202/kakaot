@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>for Marae — 카카오 이모티콘 다운로더</title>
+<meta name="description" content="카카오 이모티콘샵 링크를 붙여넣으면 정지 이미지와 움직이는 이모티콘을 미리보고 저장할 수 있는 for Marae 전용 도구." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@500;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg-blobs" aria-hidden="true">
+    <span class="blob blob--coral"></span>
+    <span class="blob blob--peri"></span>
+    <span class="blob blob--mint"></span>
+  </div>
+
+  <main class="page">
+    <header class="hero">
+      <p class="hero-kicker">✦ 마래에게 ✦</p>
+      <h1 class="hero-title">
+        <span class="sticker-tilt" id="hero-sticker">for Marae</span>
+      </h1>
+      <p class="hero-sub">이모티콘 링크를 붙여넣으면 바로 받아가요</p>
+    </header>
+
+    <section class="input-card" aria-label="이모티콘 링크 입력">
+      <form id="extract-form" class="input-row">
+        <input
+          id="input-url"
+          type="text"
+          name="input-url"
+          placeholder="https://e.kakao.com/t/..."
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="카카오 이모티콘 링크"
+        />
+        <button id="extract-btn" type="submit">
+          <span>추출</span>
+        </button>
+      </form>
+      <div class="status-row">
+        <span id="status-pill" class="pill pill--unknown">
+          <span class="dot"></span>
+          <span class="pill-text">확인 중...</span>
+        </span>
+      </div>
+    </section>
+
+    <section id="result-area" class="result-area">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-emoji">🧸</div>
+        <p>이모티콘 링크를 붙여넣어 보세요</p>
+      </div>
+
+      <div id="loading-state" class="loading-state" hidden>
+        <div class="bounce-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <p>이모티콘을 꺼내오는 중...</p>
+      </div>
+
+      <div id="error-state" class="error-state" hidden>
+        <div class="error-emoji">🙇</div>
+        <p id="error-message"></p>
+      </div>
+
+      <div id="groups" class="groups" hidden>
+        <h2 id="result-title" class="result-title"></h2>
+
+        <section class="group" id="group-animated">
+          <div class="group-header">
+            <h3><span aria-hidden="true">🎞</span> 움직이는 <span class="count" id="count-animated"></span></h3>
+            <div class="group-actions">
+              <button type="button" class="btn btn--zip" id="zip-animated">📦 전체 ZIP</button>
+            </div>
+          </div>
+          <p id="notice-animated" class="group-notice" hidden></p>
+          <div class="card-grid" id="grid-animated"></div>
+        </section>
+
+        <section class="group" id="group-stills">
+          <div class="group-header">
+            <h3><span aria-hidden="true">🖼</span> 정지 <span class="count" id="count-stills"></span></h3>
+            <div class="group-actions">
+              <button type="button" class="btn btn--zip" id="zip-stills">📦 전체 ZIP</button>
+            </div>
+          </div>
+          <p id="notice-stills" class="group-notice" hidden></p>
+          <div class="card-grid" id="grid-stills"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
