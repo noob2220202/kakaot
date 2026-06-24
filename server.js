@@ -22,11 +22,11 @@ const MIME_TYPES = {
 
 // ---- 카카오 키 파싱 / 이미지 URL 수집 ----------------------------------
 
-function parseKey(input) {
+function parseLink(input) {
   input = (input || "").trim();
-  const m = input.match(/e\.kakao\.com\/(?:t|items)\/([A-Za-z0-9_-]+)/);
-  if (m) return m[1];
-  if (/^[A-Za-z0-9_-]+$/.test(input)) return input;
+  const m = input.match(/e\.kakao\.com\/(?:t|items)\/([A-Za-z0-9_-]+)(\?\S*)?/);
+  if (m) return { key: m[1], query: m[2] || "" };
+  if (/^[A-Za-z0-9_-]+$/.test(input)) return { key: input, query: "" };
   return null;
 }
 
@@ -154,14 +154,16 @@ function serveStatic(req, res, pathname) {
 
 async function handleExtract(req, res) {
   const body = await readJsonBody(req);
-  const key = parseKey(body.input);
-  if (!key) {
+  const link = parseLink(body.input);
+  if (!link) {
     return sendJson(res, 400, {
       error: "링크를 못 읽었어요. e.kakao.com/t/... 형태인지 확인해 주세요.",
     });
   }
 
-  const apiUrl = `https://e.kakao.com/api/v1/items/t/${key}`;
+  const { key, query } = link;
+  const apiUrl = `https://e.kakao.com/api/v1/items/t/${key}${query}`;
+  const pageUrl = `https://e.kakao.com/t/${key}${query}`;
   const cookie = getSessionCookie();
 
   let json;
@@ -170,7 +172,7 @@ async function handleExtract(req, res) {
       headers: {
         ...(cookie ? { Cookie: cookie } : {}),
         "User-Agent": "Mozilla/5.0",
-        Referer: `https://e.kakao.com/t/${key}`,
+        Referer: pageUrl,
       },
     });
     if (!upstream.ok) {
