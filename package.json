@@ -13,7 +13,7 @@
     "start": "node server.js",
     "up": "npx pm2 start ecosystem.config.js && npx pm2 save",
     "down": "npx pm2 delete marae-emoticon",
-    "restart": "npx pm2 restart marae-emoticon",
+    "restart": "npx pm2 restart ecosystem.config.js --update-env",
     "logs": "npx pm2 logs marae-emoticon",
     "status": "npx pm2 status"
   },
