@@ -11,7 +11,7 @@ module.exports = {
       max_memory_restart: "300M",
       env: {
         NODE_ENV: "production",
-        PORT: 3000,
+        PORT: 7777,
         // 로컬 전용이면 접속키 불필요. 외부 노출 시에만 주석 해제:
         // ACCESS_KEY: "원하는비밀번호",
       },

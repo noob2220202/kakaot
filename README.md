@@ -26,12 +26,12 @@ npm run up          # pm2로 서버 기동 + 부팅 목록 저장
 ## 그다음부터는 한 줄
 
 ```bash
-npm run up          # → http://localhost:3000
+npm run up          # → http://localhost:7777
 ```
 
 ## 사용법
 
-1. 브라우저에서 `http://localhost:3000` 접속
+1. 브라우저에서 `http://localhost:7777` 접속
 2. 이모티콘샵 링크(`https://e.kakao.com/t/...`) 또는 공유키를 입력란에 붙여넣고 **추출**
 3. 움직이는 이모티콘 / 정지 이미지를 각각 미리보고, 개별 저장하거나 **전체 ZIP**으로 받기
 
