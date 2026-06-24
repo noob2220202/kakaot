@@ -148,6 +148,23 @@ function isLoggedInUrl(page) {
   return /^https:\/\/([\w-]+\.)?kakao\.com\//.test(url) && !/accounts\.kakao\.com/.test(url);
 }
 
+// 카카오톡 앱 로그인 승인(휴대폰에서 "로그인 승인" 누르기) 같은 경우는 화면에 에러도,
+// 입력칸 변화도 없이 그냥 같은 URL에 머물러 있다가 사용자가 폰에서 승인해야 넘어간다.
+// 그래서 짧게 한 번 보고 끝내면 안 되고, 에러 문구가 뜨지 않는 한 꽤 길게 기다려줘야 한다.
+async function waitForLoginConfirmation(page, options) {
+  const totalMs = (options && options.totalMs) || 90000;
+  const intervalMs = (options && options.intervalMs) || 3000;
+  let waited = 0;
+  while (waited < totalMs) {
+    if (isLoggedInUrl(page)) return { confirmed: true, errorText: "" };
+    const errorText = await readVisibleErrorText(page);
+    if (errorText) return { confirmed: false, errorText };
+    await page.waitForTimeout(intervalMs);
+    waited += intervalMs;
+  }
+  return { confirmed: isLoggedInUrl(page), errorText: "" };
+}
+
 (async () => {
   console.log("카카오 로그인을 진행할게요. 터미널에 아이디 / 비밀번호 / (필요 시) 인증번호를 입력하면 자동으로 로그인을 마칩니다.");
   console.log("");
@@ -181,13 +198,32 @@ function isLoggedInUrl(page) {
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
     await dumpInputs(page, "1차 로그인 제출 후");
 
-    // 같은 로그인 폼(아이디+비밀번호 칸)이 여전히 보이면 추가 인증이 아니라 로그인 자체가
-    // 실패한 것이므로, 엉뚱한 입력칸을 인증번호로 오인하지 않도록 여기서 멈추고 원인을 보여준다.
+    // 같은 로그인 폼(아이디+비밀번호 칸)이 여전히 보이는 경우, 두 가지 상황이 있을 수 있다.
+    // (1) 화면에 에러 문구가 뜬 경우 -> 아이디/비밀번호 자체가 틀린 진짜 실패.
+    // (2) 에러 문구 없이 그냥 같은 화면인 경우 -> 카카오톡 앱으로 로그인 승인 요청을 보내고
+    //     사용자가 휴대폰에서 승인하길 기다리는 중일 수 있다. 이때는 짧게 보고 포기하면 안 되고
+    //     꽤 길게(최대 90초) 기다려줘야 한다.
     if (!isLoggedInUrl(page) && (await isAnyVisible(page, PW_SELECTORS))) {
       const errorText = await readVisibleErrorText(page);
-      console.log("");
-      console.log("로그인이 처리되지 않고 같은 화면에 머물러 있어요 (아이디/비밀번호를 다시 확인해주세요).");
-      if (errorText) console.log(`화면에 표시된 메시지: ${errorText}`);
+      if (errorText) {
+        console.log("");
+        console.log("로그인이 처리되지 않고 같은 화면에 머물러 있어요 (아이디/비밀번호를 다시 확인해주세요).");
+        console.log(`화면에 표시된 메시지: ${errorText}`);
+      } else {
+        console.log("");
+        console.log("카카오톡 앱으로 로그인 승인 요청이 갔을 수 있어요. 휴대폰 알림에서 '로그인 승인'을 눌러주세요.");
+        console.log("최대 90초까지 기다릴게요...");
+        const result = await waitForLoginConfirmation(page, { totalMs: 90000, intervalMs: 3000 });
+        await dumpInputs(page, "카카오톡 승인 대기 후");
+        if (result.errorText) {
+          console.log("");
+          console.log("로그인이 처리되지 않았어요.");
+          console.log(`화면에 표시된 메시지: ${result.errorText}`);
+        } else if (!result.confirmed) {
+          console.log("");
+          console.log("90초 동안 로그인 승인을 확인하지 못했어요. 휴대폰에서 승인을 눌렀는지 확인하고 다시 시도해주세요.");
+        }
+      }
     } else {
       // 추가 인증(문자/카카오톡 인증번호 등)이 필요하면 최대 3회까지 터미널에서 입력받아 진행
       for (let attempt = 0; attempt < 3 && !isLoggedInUrl(page); attempt++) {
