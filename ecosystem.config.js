@@ -12,8 +12,9 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 7777,
-        // 로컬 전용이면 접속키 불필요. 외부 노출 시에만 주석 해제:
-        // ACCESS_KEY: "원하는비밀번호",
+        // 기본은 127.0.0.1(로컬 전용). 다른 PC/휴대폰에서 접속하려면 아래 줄의
+        // 주석을 풀고 `npm run restart`로 반영하세요.
+        // HOST: "0.0.0.0",
       },
     },
   ],

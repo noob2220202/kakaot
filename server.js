@@ -5,7 +5,7 @@ const { Readable } = require("stream");
 const archiver = require("archiver");
 
 const PORT = process.env.PORT || 7777;
-const HOST = "127.0.0.1";
+const HOST = process.env.HOST || "127.0.0.1";
 const SESSION_PATH = path.join(__dirname, "session.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 
