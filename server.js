@@ -174,12 +174,14 @@ async function handleExtract(req, res) {
       },
     });
     if (!upstream.ok) {
+      console.error(`[디버그] /api/extract 실패: key=${key} apiUrl=${apiUrl} status=${upstream.status}`);
       return sendJson(res, 404, {
         error: "이모티콘 정보를 찾을 수 없어요. 링크를 다시 확인해 주세요.",
       });
     }
     json = await upstream.json();
-  } catch {
+  } catch (err) {
+    console.error(`[디버그] /api/extract 연결 오류: key=${key} apiUrl=${apiUrl}`, err.message || err);
     return sendJson(res, 502, {
       error: "카카오 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
     });
