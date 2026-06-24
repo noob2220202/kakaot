@@ -105,6 +105,44 @@ async function waitAndClickFirst(page, selectors, options) {
   return false;
 }
 
+async function isAnyVisible(page, selectors) {
+  for (const sel of selectors) {
+    const loc = page.locator(sel).first();
+    if (await loc.isVisible().catch(() => false)) return true;
+  }
+  return false;
+}
+
+async function readVisibleErrorText(page) {
+  const candidates = ['[class*="error"]:visible', '[class*="msg_error"]:visible', '[role="alert"]:visible'];
+  for (const sel of candidates) {
+    const loc = page.locator(sel).first();
+    if (await loc.isVisible().catch(() => false)) {
+      const text = await loc.innerText().catch(() => "");
+      if (text && text.trim()) return text.trim();
+    }
+  }
+  return "";
+}
+
+async function dumpInputs(page, label) {
+  try {
+    const inputs = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("input")).map((el) => ({
+        id: el.id,
+        name: el.name,
+        type: el.type,
+        placeholder: el.placeholder,
+        visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
+      }))
+    );
+    console.log(`[디버그] ${label} - 현재 URL: ${page.url()}`);
+    console.log(`[디버그] 페이지의 input 태그들: ${JSON.stringify(inputs)}`);
+  } catch {
+    // 진단 실패는 무시하고 계속 진행
+  }
+}
+
 function isLoggedInUrl(page) {
   const url = page.url();
   return /^https:\/\/([\w-]+\.)?kakao\.com\//.test(url) && !/accounts\.kakao\.com/.test(url);
@@ -123,45 +161,61 @@ function isLoggedInUrl(page) {
 
   try {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+    await dumpInputs(page, "로그인 페이지 로드 직후");
 
     const email = await ask("카카오 아이디 (이메일 또는 전화번호): ");
     const filledId = await waitAndFillFirst(page, ID_SELECTORS, email);
     if (!filledId) {
+      await dumpInputs(page, "아이디 입력란 탐색 실패");
       throw new Error("아이디 입력란을 찾지 못했어요. 카카오 로그인 화면 구조가 바뀌었을 수 있어요.");
     }
 
     const password = await askHidden("비밀번호: ");
     const filledPw = await waitAndFillFirst(page, PW_SELECTORS, password);
     if (!filledPw) {
+      await dumpInputs(page, "비밀번호 입력란 탐색 실패");
       throw new Error("비밀번호 입력란을 찾지 못했어요. 카카오 로그인 화면 구조가 바뀌었을 수 있어요.");
     }
 
     await waitAndClickFirst(page, SUBMIT_SELECTORS);
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+    await dumpInputs(page, "1차 로그인 제출 후");
 
-    // 추가 인증(문자/카카오톡 인증번호 등)이 필요하면 최대 3회까지 터미널에서 입력받아 진행
-    for (let attempt = 0; attempt < 3 && !isLoggedInUrl(page); attempt++) {
-      const extraInput = page.locator(EXTRA_INPUT_SELECTOR).first();
-      if (!(await extraInput.isVisible().catch(() => false))) break;
-
+    // 같은 로그인 폼(아이디+비밀번호 칸)이 여전히 보이면 추가 인증이 아니라 로그인 자체가
+    // 실패한 것이므로, 엉뚱한 입력칸을 인증번호로 오인하지 않도록 여기서 멈추고 원인을 보여준다.
+    if (!isLoggedInUrl(page) && (await isAnyVisible(page, PW_SELECTORS))) {
+      const errorText = await readVisibleErrorText(page);
       console.log("");
-      console.log("추가 인증이 필요해요. 문자/카카오톡으로 받은 인증번호 등 화면에서 요구하는 값을 입력해주세요.");
-      const code = await ask("입력값: ");
-      await extraInput.fill(code);
-      await waitAndClickFirst(page, SUBMIT_SELECTORS);
-      await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-    }
+      console.log("로그인이 처리되지 않고 같은 화면에 머물러 있어요 (아이디/비밀번호를 다시 확인해주세요).");
+      if (errorText) console.log(`화면에 표시된 메시지: ${errorText}`);
+    } else {
+      // 추가 인증(문자/카카오톡 인증번호 등)이 필요하면 최대 3회까지 터미널에서 입력받아 진행
+      for (let attempt = 0; attempt < 3 && !isLoggedInUrl(page); attempt++) {
+        if (await isAnyVisible(page, PW_SELECTORS)) break; // 다시 같은 폼으로 돌아온 경우 중단
 
-    // "계속/확인/동의" 류의 안내 화면이 남아있으면 한 번 더 통과 시도
-    if (!isLoggedInUrl(page)) {
-      await waitAndClickFirst(page, [CONTINUE_SELECTOR], { retries: 1, filterText: /확인|계속|동의|허용/ });
-      await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+        const extraInput = page.locator(EXTRA_INPUT_SELECTOR).first();
+        if (!(await extraInput.isVisible().catch(() => false))) break;
+
+        console.log("");
+        console.log("추가 인증이 필요해요. 문자/카카오톡으로 받은 인증번호 등 화면에서 요구하는 값을 입력해주세요.");
+        const code = await ask("입력값: ");
+        await extraInput.fill(code);
+        await waitAndClickFirst(page, SUBMIT_SELECTORS);
+        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+        await dumpInputs(page, `추가 인증 ${attempt + 1}회차 제출 후`);
+      }
+
+      // "계속/확인/동의" 류의 안내 화면이 남아있으면 한 번 더 통과 시도
+      if (!isLoggedInUrl(page)) {
+        await waitAndClickFirst(page, [CONTINUE_SELECTOR], { retries: 1, filterText: /확인|계속|동의|허용/ });
+        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+      }
     }
 
     if (!isLoggedInUrl(page)) {
       console.log("");
       console.log("자동으로 로그인 완료를 확인하지 못했어요. 그래도 현재 세션을 저장해 둘게요.");
-      console.log("서버를 띄운 뒤 /api/status 로 로그인 여부를 확인해보고, loggedIn이 false면 다시 시도해주세요.");
+      console.log("서버를 띄운 뒤 /api/status 로 로그인 여부를 확인해보고, loggedIn이 false면 위 [디버그] 로그를 보고 다시 시도해주세요.");
     } else {
       console.log("");
       console.log("로그인에 성공했어요.");
