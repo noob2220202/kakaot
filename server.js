@@ -30,22 +30,32 @@ function parseLink(input) {
   return null;
 }
 
-function collectUrls(obj, set) {
-  if (obj == null) return;
-  if (typeof obj === "string") {
-    if (/^https?:\/\/[^"\s]+\.(png|webp|gif|jpg|jpeg)(\?[^"\s]*)?$/i.test(obj)) set.add(obj);
-    return;
+// 카카오 API는 이미지 URL에 확장자가 없어서, 실제 바이트를 조금 받아서
+// PNG/JPEG/GIF/WEBP인지, WEBP라면 애니메이션(ANIM 청크) 여부까지 직접 판별한다.
+function detectImageKind(buf) {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return "still";
   }
-  if (Array.isArray(obj)) return obj.forEach((v) => collectUrls(v, set));
-  if (typeof obj === "object") Object.values(obj).forEach((v) => collectUrls(v, set));
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8) {
+    return "still";
+  }
+  if (buf.length >= 3 && buf.toString("ascii", 0, 3) === "GIF") {
+    return "animated";
+  }
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
+    return buf.includes(Buffer.from("ANIM")) ? "animated" : "still";
+  }
+  return null;
 }
 
-function extractTitle(json, fallback) {
-  const candidates = ["title", "name", "itemName", "productName"];
-  for (const c of candidates) {
-    if (typeof json?.[c] === "string" && json[c].trim()) return json[c].trim();
+async function sniffImageKind(url) {
+  try {
+    const upstream = await fetch(url, { headers: { Range: "bytes=0-127" } });
+    if (!upstream.ok && upstream.status !== 206) return null;
+    return detectImageKind(Buffer.from(await upstream.arrayBuffer()));
+  } catch {
+    return null;
   }
-  return fallback;
 }
 
 // ---- 세션 / 쿠키 --------------------------------------------------------
@@ -161,9 +171,8 @@ async function handleExtract(req, res) {
     });
   }
 
-  const { key, query } = link;
-  const apiUrl = `https://e.kakao.com/api/v1/items/t/${key}${query}`;
-  const pageUrl = `https://e.kakao.com/t/${key}${query}`;
+  const { key } = link;
+  const apiUrl = `https://e.kakao.com/api/items/${key}`;
   const cookie = getSessionCookie();
 
   let json;
@@ -172,7 +181,6 @@ async function handleExtract(req, res) {
       headers: {
         ...(cookie ? { Cookie: cookie } : {}),
         "User-Agent": "Mozilla/5.0",
-        Referer: pageUrl,
       },
     });
     if (!upstream.ok) {
@@ -189,12 +197,25 @@ async function handleExtract(req, res) {
     });
   }
 
-  const urls = new Set();
-  collectUrls(json, urls);
-  const all = [...urls];
-  const animated = all.filter((u) => /\.(webp|gif)(\?|$)/i.test(u));
-  const stills = all.filter((u) => /\.(png|jpe?g)(\?|$)/i.test(u));
-  const title = extractTitle(json, key);
+  const items = Array.isArray(json?.contents?.items) ? json.contents.items : [];
+  const urls = items.map((item) => item?.animatedUrl).filter((u) => typeof u === "string");
+
+  if (urls.length === 0) {
+    console.error(`[디버그] /api/extract 빈 결과: key=${key} apiUrl=${apiUrl}`);
+    return sendJson(res, 404, {
+      error: "이모티콘 이미지를 찾을 수 없어요. 링크를 다시 확인해 주세요.",
+    });
+  }
+
+  const kinds = await Promise.all(urls.map(sniffImageKind));
+  const animated = [];
+  const stills = [];
+  urls.forEach((u, i) => {
+    if (kinds[i] === "animated") animated.push(u);
+    else if (kinds[i] === "still") stills.push(u);
+  });
+
+  const title = (json?.hero?.title || "").trim() || key;
 
   sendJson(res, 200, { title, animated, stills, loggedIn: isLoggedIn() });
 }
